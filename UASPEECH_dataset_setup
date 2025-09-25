@@ -1,0 +1,108 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+import os
+import shutil
+import kaggle
+
+def download():
+    kaggle.api.authenticate()
+    kaggle.api.dataset_download_files("aryashah2k/noise-reduced-uaspeech-dysarthria-dataset", path = None, unzip=True)
+
+def list_speakers():
+    list_of_speakers = []
+    list_of_dir = ['noisereduced-uaspeech', 'noisereduced-uaspeech-control']
+    for dir in list_of_dir:
+        for speaker_folder in os.listdir(dir):
+            if not speaker_folder.endswith('.py'): 
+                list_of_speakers.append(speaker_folder)
+
+    return list_of_speakers
+
+def cleanFeatDir():
+    os.remove("uaspeech/dev.csv")
+    os.remove("uaspeech/train.csv")
+    os.remove("uaspeech/test.csv")
+    if os.path.exists('uaspeech/default'):
+        for things in os.listdir('uaspeech/default'):
+            path = os.path.join('uaspeech/default', things)
+            if os.path.isfile(path):
+                os.remove(path)
+            elif os.path.isdir(path):
+                shutil.rmtree(path)
+
+
+def appendCSV(csv, label, path):
+    csv.append({
+        "is_dysarthria": label,
+        "path": path
+    })
+
+
+
+def folder_setup(train_speakers, validation_speakers, testing_speakers):
+    os.makedirs("uaspeech", exist_ok=True)
+    os.makedirs("uaspeech/default", exist_ok=True)
+    os.makedirs("uaspeech/default/validation", exist_ok=True)
+    os.makedirs("uaspeech/default/training", exist_ok=True)
+    os.makedirs("uaspeech/default/testing", exist_ok=True)
+    train_csv = []
+    dev_csv = []
+    test_csv =[]
+    list_of_dir = ['noisereduced-uaspeech', 'noisereduced-uaspeech-control']
+    seen_recordings = []
+    for dir in list_of_dir:
+        if 'control' in dir:
+            label = 0
+        else:
+            label = 1
+        for speaker_dir in os.listdir(dir):
+            speaker_dir_path = os.path.join(dir, speaker_dir)
+            if not os.path.isdir(speaker_dir_path):
+                continue
+            for files in os.listdir(speaker_dir_path):
+                file_path = os.path.join(speaker_dir_path, files)
+                if files[:-7] not in seen_recordings:
+                    seen_recordings.append(files[:-7])
+                    if speaker_dir in train_speakers:
+                        appendCSV(train_csv, label, os.path.join("uaspeech/dafault/training", files[:-4] + ".wav").replace('\\', '/'))
+                        shutil.copy2(file_path, "uaspeech/default/training")
+
+                    elif speaker_dir in validation_speakers:
+                        appendCSV(dev_csv, label, os.path.join("uaspeech/default/validation", files[:-4] + ".wav").replace('\\', '/'))
+                        shutil.copy2(file_path, "uaspeech/default/validation" )
+
+
+                    elif speaker_dir in testing_speakers:
+                        appendCSV(test_csv, label, os.path.join("uaspeech/default/testing", files[:-4] + ".wav").replace('\\', '/'))
+                        shutil.copy2(file_path, "uaspeech/default/testing" )
+
+
+    df = pd.DataFrame(train_csv)
+    df.to_csv(os.path.join('uaspeech', 'train.csv'), index=False)
+    df = pd.DataFrame(test_csv)
+    df.to_csv(os.path.join('uaspeech', 'test.csv'), index=False)
+    df = pd.DataFrame(dev_csv)
+    df.to_csv(os.path.join('uaspeech', 'dev.csv'), index=False)
+
+
+
+
+
+        
+
+
+    
+
+def main():
+    #download()
+    #print("Currently cleaning")
+    cleanFeatDir()
+    #print("Finished cleaning")
+    #devM01MC01F05M05MC05_testM04MC04FC02M08MC08
+    dev_speakers = ["M01", "MC01", "F05", "M05", "MC05"]
+    test_speakers = ["M04", "MC04", "FC02", "M08", "MC08"]
+    train_speakers = list(set(list_speakers()) - set(dev_speakers) - set(test_speakers))
+    folder_setup(train_speakers, dev_speakers, test_speakers)
+    
+
+main()
